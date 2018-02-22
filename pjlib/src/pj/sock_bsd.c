@@ -667,12 +667,25 @@ PJ_DEF(pj_status_t) pj_sock_send(pj_sock_t sock,
     flags |= MSG_NOSIGNAL;
 #endif
 
+    pj_ssize_t old_len = *len;
     *len = send(sock, (const char*)buf, *len, flags);
 
-    if (*len < 0)
-	return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
-    else
+    if (*len < 0) {
+        // If this was a file descriptor rather than a socket, try write().
+        if (pj_get_native_netos_error() == ENOTSOCK) {
+            *len = old_len;
+            *len = write(sock, (const char*)buf, *len);
+            if (*len < 0) {
+	        return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
+            } else {
+                return PJ_SUCCESS;
+            }
+        } else {
+	    return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
+        }
+    } else {
 	return PJ_SUCCESS;
+    }
 }
 
 
@@ -711,10 +724,23 @@ PJ_DEF(pj_status_t) pj_sock_recv(pj_sock_t sock,
     PJ_CHECK_STACK();
     PJ_ASSERT_RETURN(buf && len, PJ_EINVAL);
 
+    pj_ssize_t old_len = *len;
     *len = recv(sock, (char*)buf, *len, flags);
 
-    if (*len < 0)
-	return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
+    if (*len < 0) {
+        // If this was a file descriptor rather than a socket, try read().
+        if (pj_get_native_netos_error() == ENOTSOCK) {
+            *len = old_len;
+            *len = read(sock, (char*)buf, *len);
+            if (*len < 0) {
+	        return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
+            } else {
+                return PJ_SUCCESS;
+            }
+        } else {
+	    return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
+        }
+    }
     else
 	return PJ_SUCCESS;
 }
